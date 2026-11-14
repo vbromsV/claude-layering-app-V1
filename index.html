@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15171c">
+  <meta name="description" content="Layering Tool – combine images as layers, erase, restore, adjust and export PNG. Works offline; images never leave your device.">
+  <title>Layering Tool</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header id="topbar">
+    <button id="btnLoad" class="btn primary" type="button">Load</button>
+    <label class="opacity" for="opacity">
+      <span class="opacity-label">Opacity</span>
+      <input id="opacity" type="range" min="0" max="100" step="1" value="100" disabled>
+      <output id="opacityVal">100%</output>
+    </label>
+    <button id="btnSave" class="btn primary" type="button">Save</button>
+    <input id="fileInput" type="file" accept="image/*" multiple hidden>
+  </header>
+
+  <main id="stage">
+    <canvas id="view"></canvas>
+    <div id="empty" class="empty">
+      <p><strong>No layers yet</strong></p>
+      <p>Tap <em>Load</em> to import one or more images.</p>
+    </div>
+    <button id="btnFlip" class="float-btn" type="button" title="Flip active layer horizontally" aria-label="Flip horizontally" hidden>↔</button>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <footer id="panel">
+    <div class="row bar">
+      <button id="btnUndo" class="btn ghost" type="button" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
+      <button id="btnCollapse" class="handle" type="button" aria-label="Collapse tool panel" aria-expanded="true"><span>▾</span></button>
+      <button id="btnRedo" class="btn ghost" type="button" disabled title="Redo (Ctrl+Y)">Redo ↷</button>
+    </div>
+    <div class="row main">
+      <button id="btnTool" class="btn tool" type="button" title="Cycle tool: Move → Erase → Restore → Zoom → Adjust">
+        <span class="tool-k">Tool</span> <span id="toolName">Move</span>
+      </button>
+      <button id="btnLayers" class="btn" type="button">Layers <span id="layerCount" class="badge">0</span></button>
+    </div>
+
+    <div id="settings" class="settings">
+      <!-- Move -->
+      <div class="tool-settings" data-for="move">
+        <p class="hint only-mobile">Drag with one finger to move. Pinch and twist with two fingers to scale and rotate.</p>
+        <p class="hint only-pc">Drag to move · Wheel to scale · Shift + wheel or the handle to rotate.</p>
+      </div>
+
+      <!-- Erase / Restore -->
+      <div class="tool-settings" data-for="erase restore">
+        <div class="srow"><label for="brushSize">Size</label><input id="brushSize" type="range" min="2" max="400" value="60"><output id="brushSizeVal">60</output></div>
+        <div class="srow"><label for="brushHard">Hardness</label><input id="brushHard" type="range" min="0" max="100" value="80"><output id="brushHardVal">80%</output></div>
+        <div class="srow"><label for="brushStrength">Strength</label><input id="brushStrength" type="range" min="1" max="100" value="100"><output id="brushStrengthVal">100%</output></div>
+        <div class="srow" id="tolRow" hidden><label for="brushTol">Tolerance</label><input id="brushTol" type="range" min="0" max="100" value="20"><output id="brushTolVal">20%</output></div>
+        <div class="toggles">
+          <button id="btnMagic" class="toggle" type="button" aria-pressed="false">✦ Magic</button>
+          <button id="btnIndicator" class="toggle" type="button" aria-pressed="true">◎ Indicator</button>
+        </div>
+      </div>
+
+      <!-- Zoom -->
+      <div class="tool-settings" data-for="zoom">
+        <div class="zoomrow">
+          <span>View <output id="zoomVal">100%</output></span>
+          <button id="btnFit" class="btn small" type="button">Fit</button>
+          <button id="btn100" class="btn small" type="button">100%</button>
+        </div>
+        <p class="hint only-mobile">Drag to pan the view. Pinch to zoom. Layers are not changed.</p>
+        <p class="hint only-pc">Drag to pan · Wheel to zoom around the pointer. Layers are not changed.</p>
+      </div>
+
+      <!-- Adjust -->
+      <div class="tool-settings adjust" data-for="adjust">
+        <div class="srow"><label for="adj-brightness">Brightness</label><input id="adj-brightness" data-adj="brightness" type="range" min="-100" max="100" value="0"><output data-reset="brightness" title="Tap to reset">0</output></div>
+        <div class="srow"><label for="adj-contrast">Contrast</label><input id="adj-contrast" data-adj="contrast" type="range" min="-100" max="100" value="0"><output data-reset="contrast" title="Tap to reset">0</output></div>
+        <div class="srow"><label for="adj-saturation">Saturation</label><input id="adj-saturation" data-adj="saturation" type="range" min="-100" max="100" value="0"><output data-reset="saturation" title="Tap to reset">0</output></div>
+        <div class="srow"><label for="adj-hue">Hue</label><input id="adj-hue" data-adj="hue" type="range" min="-180" max="180" value="0"><output data-reset="hue" title="Tap to reset">0</output></div>
+        <div class="srow"><label for="adj-gamma">Gamma</label><input id="adj-gamma" data-adj="gamma" type="range" min="-100" max="100" value="0"><output data-reset="gamma" title="Tap to reset">0</output></div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Layers panel -->
+  <div id="layersPanel" class="backdrop" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="layersTitle">
+      <header class="sheet-head">
+        <h2 id="layersTitle">Layers</h2>
+        <button id="btnCloseLayers" class="btn small" type="button">Close</button>
+      </header>
+      <div class="srow only-mobile offset-row">
+        <label for="brushOffset">Offset</label><input id="brushOffset" type="range" min="0" max="160" value="0"><output id="brushOffsetVal">0</output>
+      </div>
+      <ol id="layerList" class="layer-list"></ol>
+      <p id="layersEmpty" class="hint center" hidden>No layers. Use Load to import images.</p>
+    </section>
+  </div>
+
+  <!-- Crop dialog (import + export) -->
+  <div id="cropDialog" class="crop" hidden>
+    <header class="crop-head">
+      <span id="cropTitle">Crop</span>
+      <span id="cropInfo" class="crop-info"></span>
+    </header>
+    <div class="crop-area"><canvas id="cropCanvas"></canvas></div>
+    <footer class="crop-foot">
+      <button id="cropCancel" class="btn" type="button">Cancel</button>
+      <button id="cropReset" class="btn ghost" type="button">Full</button>
+      <button id="cropOk" class="btn primary" type="button">OK</button>
+    </footer>
+  </div>
+</body>
+</html>
